@@ -364,6 +364,7 @@ const EntriesList = () => {
                         size="icon"
                         className="h-8 w-8 text-muted-foreground hover:text-foreground"
                         onClick={() => openEdit(entry)}
+                        aria-label={`Edit entry ${entry.id}`}
                       >
                         <PencilLine className="h-4 w-4" />
                       </Button>
@@ -372,6 +373,7 @@ const EntriesList = () => {
                         size="icon"
                         className="h-8 w-8 text-muted-foreground hover:text-destructive"
                         onClick={() => handleDelete(entry.id)}
+                        aria-label={`Delete entry ${entry.id}`}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>

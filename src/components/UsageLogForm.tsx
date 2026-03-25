@@ -239,7 +239,7 @@ const UsageLogForm = () => {
                 value={form.purposeCategory}
                 onValueChange={(v) => updateField("purposeCategory", v)}
               >
-                <SelectTrigger>
+                <SelectTrigger id="purposeCategory">
                   <SelectValue placeholder="Select a category" />
                 </SelectTrigger>
                 <SelectContent>
@@ -278,6 +278,7 @@ const UsageLogForm = () => {
                 variant="outline"
                 size="sm"
                 onClick={addToolEntry}
+                aria-label="Add tool entry"
               >
                 <Plus className="mr-2 h-4 w-4" />
                 Add Tool
@@ -320,6 +321,7 @@ const UsageLogForm = () => {
                       size="icon"
                       className="text-muted-foreground hover:text-destructive"
                       onClick={() => removeToolEntry(index)}
+                      aria-label={`Remove tool entry ${index + 1}`}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
