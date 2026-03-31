@@ -23,4 +23,4 @@ function initDb() {
   });
 }
 
-module.exports = { db, initDb };
+module.exports = { db, initDb, DB_PATH };
