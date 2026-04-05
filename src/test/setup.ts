@@ -1,4 +1,4 @@
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 
 Object.defineProperty(window, "matchMedia", {
   writable: true,
@@ -15,7 +15,33 @@ Object.defineProperty(window, "matchMedia", {
 });
 
 class ResizeObserverMock {
-  observe() {}
+  private callback?: ResizeObserverCallback;
+
+  constructor(callback?: ResizeObserverCallback) {
+    this.callback = callback;
+  }
+
+  observe(target: Element) {
+    this.callback?.(
+      [
+        {
+          target,
+          contentRect: {
+            width: 1024,
+            height: 600,
+            x: 0,
+            y: 0,
+            top: 0,
+            left: 0,
+            right: 1024,
+            bottom: 600,
+            toJSON: () => ({}),
+          },
+        } as ResizeObserverEntry,
+      ],
+      this as unknown as ResizeObserver,
+    );
+  }
   unobserve() {}
   disconnect() {}
 }
@@ -45,3 +71,13 @@ if (!Element.prototype.releasePointerCapture) {
 if (!HTMLElement.prototype.scrollIntoView) {
   HTMLElement.prototype.scrollIntoView = () => {};
 }
+
+Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+  configurable: true,
+  get: () => 1024,
+});
+
+Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+  configurable: true,
+  get: () => 600,
+});

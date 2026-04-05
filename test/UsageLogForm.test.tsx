@@ -261,4 +261,156 @@ describe("UsageLogForm", () => {
     await userEvent.tab();
     expect(screen.getByLabelText(/date of use/i)).toHaveFocus();
   });
+
+  it("submits one payload per tool entry when multiple tools are added", async () => {
+    vi.mocked(createLog)
+      .mockResolvedValueOnce({
+        id: 11,
+        assignmentTitle: "Assignment",
+        dateOfUse: "2026-03-20",
+        tool: "ChatGPT",
+        purposeCategory: "Drafting",
+        optionalExplanation: null,
+        promptQueryUsed: null,
+        outputReceived: null,
+        modifiedOutput: null,
+        createdAt: "2026-03-20T12:00:00.000Z",
+      })
+      .mockResolvedValueOnce({
+        id: 12,
+        assignmentTitle: "Assignment",
+        dateOfUse: "2026-03-20",
+        tool: "Claude",
+        purposeCategory: "Drafting",
+        optionalExplanation: null,
+        promptQueryUsed: null,
+        outputReceived: null,
+        modifiedOutput: null,
+        createdAt: "2026-03-20T12:00:00.000Z",
+      });
+
+    renderWithProviders(<UsageLogForm />);
+
+    await userEvent.type(
+      screen.getByLabelText(/assignment name/i),
+      "Assignment",
+    );
+
+    await openComboboxByName(/purpose category/i);
+    await chooseOption("Drafting");
+
+    await openComboboxByName(/ai tool used/i);
+    await chooseOption("ChatGPT");
+
+    await userEvent.click(screen.getByRole("button", { name: /add tool/i }));
+
+    const toolCombos = screen.getAllByRole("combobox", {
+      name: /ai tool used/i,
+    });
+    await userEvent.click(toolCombos[1]);
+    await chooseOption("Claude");
+
+    await userEvent.click(screen.getByRole("button", { name: /save entry/i }));
+
+    await waitFor(() => {
+      expect(createLog).toHaveBeenCalledTimes(2);
+    });
+
+    expect(vi.mocked(createLog).mock.calls[0][0]).toEqual(
+      expect.objectContaining({ tool: "ChatGPT" }),
+    );
+    expect(vi.mocked(createLog).mock.calls[1][0]).toEqual(
+      expect.objectContaining({ tool: "Claude" }),
+    );
+  });
+
+  it("blocks submission if any added tool entry is not selected", async () => {
+    renderWithProviders(<UsageLogForm />);
+
+    await userEvent.type(
+      screen.getByLabelText(/assignment name/i),
+      "Assignment",
+    );
+
+    await openComboboxByName(/purpose category/i);
+    await chooseOption("Drafting");
+
+    await openComboboxByName(/ai tool used/i);
+    await chooseOption("ChatGPT");
+
+    await userEvent.click(screen.getByRole("button", { name: /add tool/i }));
+    await userEvent.click(screen.getByRole("button", { name: /save entry/i }));
+
+    expect(toast.error).toHaveBeenCalledWith(
+      "Please select an AI tool for each entry.",
+    );
+    expect(createLog).not.toHaveBeenCalled();
+  });
+
+  it("allows removing an added tool entry", async () => {
+    renderWithProviders(<UsageLogForm />);
+
+    await userEvent.click(screen.getByRole("button", { name: /add tool/i }));
+    expect(
+      screen.getByRole("button", { name: /remove tool entry 2/i }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /remove tool entry 2/i }),
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /remove tool entry 2/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("submits tool text fields and shows error when API save fails", async () => {
+    vi.mocked(createLog).mockRejectedValue(new Error("save failed"));
+
+    renderWithProviders(<UsageLogForm />);
+
+    await userEvent.type(screen.getByLabelText(/course/i), "TDT4242");
+    await userEvent.type(screen.getByLabelText(/task type/i), "Essay");
+    await userEvent.type(
+      screen.getByLabelText(/assignment name/i),
+      "Reflection report",
+    );
+
+    await openComboboxByName(/purpose category/i);
+    await chooseOption("Drafting");
+
+    await openComboboxByName(/ai tool used/i);
+    await chooseOption("ChatGPT");
+
+    await userEvent.type(
+      screen.getByLabelText(/prompt \/ query used/i),
+      "Draft a short outline",
+    );
+    await userEvent.type(
+      screen.getByLabelText(/output received/i),
+      "Here is a 3-point outline",
+    );
+    await userEvent.type(
+      screen.getByLabelText(/how you modified the output/i),
+      "Rewrote and added references",
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: /save entry/i }));
+
+    await waitFor(() => {
+      expect(createLog).toHaveBeenCalledTimes(1);
+    });
+
+    expect(createLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        assignmentTitle: "TDT4242 | Essay | Reflection report",
+        promptQueryUsed: "Draft a short outline",
+        outputReceived: "Here is a 3-point outline",
+        modifiedOutput: "Rewrote and added references",
+      }),
+    );
+    expect(toast.error).toHaveBeenCalledWith(
+      "Failed to save AI usage. Please try again.",
+    );
+  });
 });

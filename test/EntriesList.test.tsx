@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import EntriesList from "@/components/EntriesList";
 import { deleteLog, getLogs, updateLog } from "@/lib/api";
 import { renderWithProviders } from "@/test/test-utils";
+import { toast } from "sonner";
 
 vi.mock("@/lib/api", () => ({
   getLogs: vi.fn(),
@@ -184,5 +185,141 @@ describe("EntriesList", () => {
     expect(
       screen.getByRole("button", { name: /delete entry 2/i }),
     ).toBeInTheDocument();
+  });
+
+  it("shows empty state when there are no entries", async () => {
+    vi.mocked(getLogs).mockResolvedValue([]);
+
+    renderWithProviders(<EntriesList />);
+
+    expect(await screen.findByText(/no entries yet/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /start logging your ai usage to build your declaration/i,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("disables export action when there are no entries", async () => {
+    vi.mocked(getLogs).mockResolvedValue([]);
+
+    renderWithProviders(<EntriesList />);
+
+    const downloadButton = await screen.findByRole("button", {
+      name: /download declaration/i,
+    });
+    expect(downloadButton).toBeDisabled();
+  });
+
+  it("updates all editable fields and sends them in update payload", async () => {
+    vi.mocked(updateLog).mockResolvedValue({
+      ...entriesFixture[0],
+      assignmentTitle: "TDT4242 | Essay | Revised Climate Report",
+      tool: "Claude",
+      purposeCategory: "Research Support",
+      optionalExplanation: "Added more context",
+      promptQueryUsed: "new prompt",
+      outputReceived: "new output",
+      modifiedOutput: "new modifications",
+    });
+
+    renderWithProviders(<EntriesList />);
+
+    await screen.findByText("Climate Report");
+    await userEvent.click(
+      screen.getByRole("button", { name: /edit entry 1/i }),
+    );
+
+    await userEvent.type(
+      screen.getByLabelText(/optional details/i),
+      " updated",
+    );
+    await userEvent.type(
+      screen.getByLabelText(/prompt \/ query used/i),
+      " plus",
+    );
+    await userEvent.type(screen.getByLabelText(/output received/i), " plus");
+    await userEvent.type(
+      screen.getByLabelText(/how you modified the output/i),
+      " plus",
+    );
+
+    const toolCombo = screen.getByRole("combobox", { name: /ai tool used/i });
+    await userEvent.click(toolCombo);
+    await userEvent.click(
+      await screen.findByRole("option", { name: "Claude", hidden: true }),
+    );
+
+    const purposeCombo = screen.getByRole("combobox", {
+      name: /purpose category/i,
+    });
+    await userEvent.click(purposeCombo);
+    await userEvent.click(
+      await screen.findByRole("option", {
+        name: "Research Support",
+        hidden: true,
+      }),
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /save changes/i }),
+    );
+
+    await waitFor(() => {
+      expect(updateLog).toHaveBeenCalledTimes(1);
+    });
+
+    expect(updateLog).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        tool: "Claude",
+        purposeCategory: "Research Support",
+        optionalExplanation: "Helped structure sections updated",
+        promptQueryUsed: "Create an outline plus",
+        outputReceived: "A 5-point outline plus",
+        modifiedOutput: "Reordered points and added references plus",
+      }),
+    );
+  });
+
+  it("shows error toast when updating entry fails", async () => {
+    vi.mocked(updateLog).mockRejectedValue(new Error("update failed"));
+
+    renderWithProviders(<EntriesList />);
+
+    await screen.findByText("Climate Report");
+    await userEvent.click(
+      screen.getByRole("button", { name: /edit entry 1/i }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /save changes/i }),
+    );
+
+    await waitFor(() => {
+      expect(updateLog).toHaveBeenCalledTimes(1);
+    });
+
+    expect(toast.error).toHaveBeenCalledWith("Failed to update entry.");
+  });
+
+  it("parses assignment titles with partial or no separators", async () => {
+    vi.mocked(getLogs).mockResolvedValue([
+      {
+        ...entriesFixture[0],
+        id: 11,
+        assignmentTitle: "TDT4242 | Quick Reflection",
+      },
+      {
+        ...entriesFixture[1],
+        id: 12,
+        assignmentTitle: "Standalone Assignment",
+      },
+    ]);
+
+    renderWithProviders(<EntriesList />);
+
+    expect(await screen.findByText("Quick Reflection")).toBeInTheDocument();
+    expect(screen.getByText("Standalone Assignment")).toBeInTheDocument();
+    expect(screen.getByText("TDT4242")).toBeInTheDocument();
   });
 });

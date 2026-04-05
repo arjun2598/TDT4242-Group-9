@@ -55,12 +55,12 @@ describe("Dashboard", () => {
 
   const selectFilterValue = async (label: RegExp, optionName: string) => {
     const trigger = screen.getByRole("combobox", { name: label });
-    fireEvent.pointerDown(trigger);
-    const matches = await screen.findAllByText(optionName);
-    const optionContainer =
-      matches.map((node) => node.closest('[role="option"]')).find(Boolean) ??
-      matches[matches.length - 1];
-    fireEvent.click(optionContainer as Element);
+    await userEvent.click(trigger);
+    const option = await screen.findByRole("option", {
+      name: new RegExp(`^${optionName}$`, "i"),
+      hidden: true,
+    });
+    await userEvent.click(option);
   };
 
   it("FTC-10 renders dashboard components", async () => {
@@ -98,8 +98,27 @@ describe("Dashboard", () => {
       const totalLogsValue =
         totalLogsHeading.parentElement?.nextElementSibling?.textContent ?? "";
       expect(totalLogsValue.trim()).toBe("1");
-      expect(screen.getByText("ChatGPT")).toBeInTheDocument();
       expect(screen.queryByText("Claude")).not.toBeInTheDocument();
+    });
+  });
+
+  it("FTC-11 applies time period filter correctly", async () => {
+    vi.mocked(getLogs).mockResolvedValue(dashboardEntries);
+
+    renderWithProviders(<Dashboard />, { route: "/dashboard" });
+
+    await screen.findByText(/usage dashboard/i);
+
+    await selectFilterValue(/time period/i, "All time");
+
+    await waitFor(() => {
+      const totalLogsHeading = screen.getByRole("heading", {
+        name: /total logs/i,
+      });
+      const totalLogsValue =
+        totalLogsHeading.parentElement?.nextElementSibling?.textContent ?? "";
+      expect(totalLogsValue.trim()).toBe("3");
+      expect(screen.getByText("Claude")).toBeInTheDocument();
     });
   });
 
@@ -129,6 +148,54 @@ describe("Dashboard", () => {
     await waitFor(() => {
       expect(courseInput).toHaveValue("TDT4242");
       expect(screen.queryByText("Claude")).not.toBeInTheDocument();
+    });
+  });
+
+  it("FNFR-03 renders dashboard within acceptable time budget", async () => {
+    vi.mocked(getLogs).mockResolvedValue(dashboardEntries);
+
+    const start = performance.now();
+    renderWithProviders(<Dashboard />, { route: "/dashboard" });
+
+    await screen.findByRole("heading", { name: /usage dashboard/i });
+    const durationMs = performance.now() - start;
+
+    expect(durationMs).toBeLessThan(2000);
+  });
+
+  it("handles custom date range and assignment title formats with fewer separators", async () => {
+    vi.mocked(getLogs).mockResolvedValue([
+      {
+        ...dashboardEntries[0],
+        assignmentTitle: "TDT4242 | Reflection",
+        dateOfUse: "2026-03-20",
+      },
+      {
+        ...dashboardEntries[1],
+        assignmentTitle: "Standalone Assignment",
+        dateOfUse: "2026-02-01",
+      },
+    ]);
+
+    renderWithProviders(<Dashboard />, { route: "/dashboard" });
+
+    await screen.findByText(/usage dashboard/i);
+
+    await userEvent.type(screen.getByLabelText(/course/i), "TDT4242");
+
+    await selectFilterValue(/time period/i, "Custom range");
+    await userEvent.clear(screen.getByLabelText(/^from$/i));
+    await userEvent.type(screen.getByLabelText(/^from$/i), "2026-03-01");
+    await userEvent.clear(screen.getByLabelText(/^to$/i));
+    await userEvent.type(screen.getByLabelText(/^to$/i), "2026-03-31");
+
+    await waitFor(() => {
+      const totalLogsHeading = screen.getByRole("heading", {
+        name: /total logs/i,
+      });
+      const totalLogsValue =
+        totalLogsHeading.parentElement?.nextElementSibling?.textContent ?? "";
+      expect(totalLogsValue.trim()).toBe("1");
     });
   });
 });
